@@ -1,0 +1,4 @@
+useDynLib(ngreg)
+import(RcppEigen)
+importFrom(Rcpp, evalCpp)
+export(rcppeigen_hello_world, rcppeigen_innerproduct)
