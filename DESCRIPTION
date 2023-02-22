@@ -5,7 +5,7 @@ Version: 1.0
 Date: 2023-02-16
 Author: Carson McKee
 Maintainer: Carson McKee <carson.mckee@kcl.ac.uk>
-Description: This package implements Bayesian regression using the Normal-Gamma prior described by Griffin & Brown (2010). This particularly suited to problems where the number of observations is small relative to the number of predictors. 
+Description: This package implements Bayesian regression using the Normal-Gamma prior described by Griffin & Brown (2010). This is particularly suited to problems where p>n. 
 License: GPLv3
 Imports: Rcpp, RcppEigen
 LinkingTo: Rcpp, RcppEigen
