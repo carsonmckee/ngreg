@@ -1,4 +1,9 @@
 useDynLib(ngreg)
-import(RcppEigen)
+
+importFrom(tictoc, tic, toc)
 importFrom(Rcpp, evalCpp)
-export(rcppeigen_hello_world, rcppeigen_innerproduct)
+importFrom(stats, quantile)
+
+export(NG)
+S3method(summary, NG)
+S3method(print, NG)
