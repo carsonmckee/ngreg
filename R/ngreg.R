@@ -1,35 +1,72 @@
 
-summary.NG <- function(obj, burn_in=2000, ...){
-  # custom summary for NG object
-  out <- list(
-    call=obj$call
-  )
-}
-
-
-print.NG <- function(object, ...){
-  cat("\nCall:\n")
-  print(object$call)
-}
-
-create_value <- function(chains, 
-                         n_samples, 
-                         n_thin, 
-                         tuning_freq, 
-                         tuning_time,
-                         call_=NULL){
+summary.NG <- function(object, burnin=2000, estimate = "mean", CI.level =
+                         0.05, nonzero_only = TRUE, ...){
+  
+  if(estimate == "mean"){
+    est <- mean
+  } else if(estimate == "median"){
+    est <- median
+  } else {
+    stop('Only mean and median are supported for posterior estimates.')
+  }
+  
+  if(CI.level <= 0 | CI.level >= 1){
+    stop('CI.level must be in range (0, 1)')
+  }
+  
+  p <- ncol(object$X)
+  chains <- object$samples[burnin:object$n_samples,-((p+2):(2*p+1))]
+  coefficients <- cbind(apply(chains, 2, est),
+                        t(apply(chains, 
+                                2, 
+                                quantile, 
+                                probs=c(CI.level/2, 1-CI.level/2)))
+                        )
+  colnames(coefficients)[1] <- estimate
+  info <- ''
+  if(nonzero_only){
+    coefficients <- coefficients[!((coefficients[,2] < 0) & (coefficients[,3] > 0)),]
+    info <- 'Showing non zero coefficients only.'
+  }
+  
   obj <- list(
-    call=call_,
-    n_samples=n_samples,
-    n_thin=n_thin,
-    tuning_freq=tuning_freq,
-    tuning_time=tuning_time,
-    samples=chains,
-    CI = t(apply(chains , 2 , quantile , probs=c(0.05, 0.95)))
+    call = object$call,
+    nonzero_only = nonzero_only,
+    coefficients = coefficients 
   )
-  attr(obj, 'class') <- 'NG'
+  attr(obj, 'class') <- 'summary.NG'
   
   obj
+}
+
+print.summary.NG <- function(x, ...){
+  cat("\nCall:\n")
+  print(x$call)
+  if(x$nonzero_only){
+    cat("\nCoefficients (non-zero only):\n")
+  } else {
+    cat("\nCoefficients:\n")
+  }
+  print(head(x$coefficients, nrow(x$coefficients)-3))
+  cat("\nErrors Standard Deviation:\n")
+  print(x$coefficients['sigma',])
+  cat("\nShrinkage Parameters:\n")
+  print(tail(x$coefficients, 2))
+  
+}
+
+print.NG <- function(x, ...){
+  cat("\nCall:\n")
+  print(x$call)
+  cat("\nModel Info:\n")
+  cat("n         =", nrow(x$X), "\n")
+  cat("p         =", ncol(x$X), "\n")
+  cat("\nMCMC Info:\n")
+  cat("n_samples   =", x$n_samples, "\n")
+  cat("n_thin      =", x$n_thin, "\n")
+  cat("tuning_time =", x$tuning_time, "\n")
+  cat("tuning_freq =", x$tuning_freq, "\n")
+  cat("*** Call summary(NG_OBJECT) to obtain posterior summaries ***")
 }
 
 NG <- function(
@@ -43,7 +80,7 @@ NG <- function(
     init_sigma   = 1.0, 
     init_lambda  = 1.0,
     init_gamma   = 1.0, 
-    init_prop_sd = 0.1,
+    init_prop_sd = 1,
     tuning_time  = 2000, 
     tuning_freq  = 200, 
     verbose      = TRUE){
@@ -125,39 +162,41 @@ NG <- function(
                      'lambda',
                      'gamma')
   
-  obj <- create_value(chains=chains, 
-                      n_samples=n_samples, 
-                      n_thin=n_thin, 
-                      tuning_freq=tuning_freq, 
-                      tuning_time=tuning_time,
-                      call=call_)
+  # create NG object
+  obj <- list(
+    call=call_,
+    y = y,
+    X = X,
+    n_samples=n_samples,
+    n_thin=n_thin,
+    tuning_freq=tuning_freq,
+    tuning_time=tuning_time,
+    samples=chains
+  )
+  attr(obj, 'class') <- 'NG'
+  
   gc()
   
   if(verbose){
     tictoc::toc()
   }
-  return(obj)
+  
+  obj
 }
 
 # set.seed(1234)
-# p <- 80
-# n <- 200
+# p <- 100
+# n <- 10000
 # X <- matrix(rnorm(p*n, 0, 1), nrow=n, ncol=p)
-# y <- -2 + 1*(X[,1] + X[,10] + X[,30] + X[,40]) + rnorm(n, 0, 1)
+# y <- 2 + 5*(X[,1] + X[,10] + X[,20] + X[,30] + X[,40]) + rnorm(n)
 # 
-# mod <- NG(y, X)
-# 
-# plot(mod$samples$alpha, type='l')
-# plot(mod$samples$beta_1, type='l')
-# plot(mod$samples$beta_2, type='l')
-# plot(mod$samples$beta_10, type='l')
-# plot(mod$samples$sigma, type='l')
-# plot(mod$samples$gamma, type='l')
-# plot(mod$samples$lambda, type='l')
+# mod <- NG(y, X, n_samples=50000)
 # 
 # summary(mod)
 
-# mod$CI[!((mod$CI[,1] < 0) & (mod$CI[,2] > 0)),]
-# acf(get_chains(y, X, 10000, n_thin=1, verbose=TRUE)$beta_1)
-# acf(get_chains(y, X, 10000, n_thin=10, verbose=TRUE)$beta_1)
+# plot(mod$samples$alpha, type='l')
+# plot(mod$samples$beta_1, type='l')
+# plot(mod$samples$gamma, type='l')
+# plot(mod$samples$lambda, type='l')
+# # plot(mod$samples$sigma, type='l')
 
