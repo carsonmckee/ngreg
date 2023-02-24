@@ -6,7 +6,7 @@
 // [[Rcpp::depends(RcppEigen)]]
 
 double update_sigma(const int &n, const Eigen::MatrixXd &y, const Eigen::MatrixXd &x, const double &alpha, const Eigen::MatrixXd &beta){
-  int c = n/2.0;
+  double c = n/2.0;
   double d = ((y.array()-alpha) - (x*beta).array()).square().sum() / 2;
   return 1/std::sqrt(R::rgamma(c, 1/d));
 }
@@ -24,6 +24,12 @@ Eigen::ArrayXd update_psi(int const &p, const Eigen::MatrixXd &beta, const doubl
     out(j) = rgig1(m, beta(j, 0)*beta(j, 0), gamma_);
   }
   return out;
+}
+
+void flush_console() {
+#if !defined(WIN32) && !defined(__WIN32) && !defined(__WIN32__)
+  R::R_FlushConsole();
+#endif
 }
 
 Eigen::MatrixXd update_alpha_beta(const Eigen::MatrixXd &X_t_X, 
@@ -103,6 +109,7 @@ Eigen::MatrixXd get_chains(const Eigen::MatrixXd &y,
   double curr_gamma = init_gamma;
   Eigen::ArrayXd new_alpha_beta;
   
+  // some indices and counters
   int sigma_ind = 2*p + 1;
   int lambda_ind = 2*p + 2;
   int gamma_ind = 2*p + 3;
@@ -111,15 +118,15 @@ Eigen::MatrixXd get_chains(const Eigen::MatrixXd &y,
   int temp = 0;
   int interupt_count = 0;
   
+  // store initial chain states
   chains(0, 0) = curr_alpha;
-  for(int k=1; k<(p+1); k++){
-    chains(0, k) = curr_beta(k-1, 0);
-    chains(0, k+p) = curr_psi(k-1, 0);
-  }
+  chains.block(0, 1, 1, p) = curr_beta.transpose();
+  chains.block(0, p+1, 1, p ) = curr_psi.transpose();
   chains(0, sigma_ind) = curr_sigma;
   chains(0, lambda_ind) = curr_lambda;
   chains(0, gamma_ind) = curr_gamma;
-
+  
+  // get random number state
   GetRNGstate();
   
   Eigen::ArrayXd log_lambdas(tuning_time);
@@ -141,38 +148,36 @@ Eigen::MatrixXd get_chains(const Eigen::MatrixXd &y,
       curr_gamma = update_gamma(p, M, curr_lambda, curr_psi);
       curr_lambda = update_lambda(p, curr_psi, curr_gamma, curr_lambda, proposal_sd);
       
-      if(temp+t <= tuning_time){
+      if((temp+t) <= tuning_time){
         // store previous values to be used in adaptive metropolis step
         log_lambdas(temp+t) = std::log(curr_lambda);
         tuning_count += 1;
       }
       
-      if(tuning_count == tuning_freq & (temp+t) <= tuning_time){
+      if((tuning_count == tuning_freq) & ((temp+t) <= tuning_time)){
         // Metropolis proposal variance tuning step (Haario)
         K = log_lambdas.segment(temp+t-tuning_freq, tuning_freq);
         K_hat = K - K.mean();
-        proposal_sd = 2.4*std::sqrt((K_hat*K_hat).sum())/(tuning_freq-1);
+        proposal_sd = 2.4*std::sqrt((K_hat*K_hat).sum())/std::sqrt(tuning_freq-1);
         tuning_count = 0;
       }
       
     }
     
-    if((verbose == 1) & (verb_freq_count == 100)){
-      // show percentage completed
-      std::cout << std::round(100 * double(i)/n_samp) << " %\r";
-      std::cout.flush();
-      verb_freq_count=0;
-    }
-    
-    // store updated parameters in 'chains'
+    // store updated parameters
     chains(i, 0) = curr_alpha;
-    for(int k=1; k<(p+1); k++){
-      chains(i, k) = curr_beta(k-1, 0);
-      chains(i, k+p) = curr_psi(k-1, 0);
-    }
+    chains.block(i, 1, 1, p) = curr_beta.transpose();
+    chains.block(i, p+1, 1, p ) = curr_psi.transpose();
     chains(i, sigma_ind) = curr_sigma;
     chains(i, lambda_ind) = curr_lambda;
     chains(i, gamma_ind) = curr_gamma;
+    
+    if((verbose == 1) & (verb_freq_count == 100)){
+      // show percentage completed
+      Rcpp::Rcout << std::round(100 * double(i+1)/n_samp) << " %\r";
+      flush_console();
+      verb_freq_count=0;
+    }
     
     if(interupt_count == 500){
       // check if user wants to terminate after every 500 iterations
@@ -184,7 +189,10 @@ Eigen::MatrixXd get_chains(const Eigen::MatrixXd &y,
     
   }
   
+  // return random number state
   PutRNGstate();
+  
+  flush_console();
   
   return chains;
 }

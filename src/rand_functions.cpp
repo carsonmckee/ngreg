@@ -1,3 +1,6 @@
+// Contains functions for generating multivariate normal samples (using Eigen) and 
+// Generalized Inverse Gaussian samples (using the algorithm of Hormann, J. (2014)).
+
 #include <RcppEigen.h>
 #include <R.h>
 #include <cmath>
@@ -28,6 +31,7 @@ Eigen::MatrixXd rmvnorm(const int &n, const Eigen::MatrixXd &mean, const Eigen::
 
 double rgig1(double const &lambda, double const &chi, double const &psi){
   // generate 1 sample from the Generalized Inverse Gaussian distribution
+  // using the algorithm of Hormann, J. (2014).
   
   double lambda_abs = std::abs(lambda);
   double rv;
@@ -118,36 +122,31 @@ double algo2(double const &lambda, double const &beta){
 
 
 double algo3(double const &lambda, double const &beta){
-  double xm, nc;     /* location of mode; c=log(f(xm)) normalization constant */
-  double s, t;       /* auxiliary variables */
-  double U, V, X;    /* random variables */
+  double xm, nc;
+  double s, t; 
+  double U, V, X; 
   
-  double a, b, c;    /* coefficent of cubic */
-  double p, q;       /* coefficents of depressed cubic */
-  double fi, fak;    /* auxiliary results for Cardano's rule */
+  double a, b, c;
+  double p, q;
+  double fi, fak;
   
-  double y1, y2;     /* roots of (1/x)*sqrt(f((1/x)+m)) */
+  double y1, y2;
   
-  double uplus, uminus;  /* maximum and minimum of x*sqrt(f(x+m)) */
-  
-  /* -- Setup -------------------------------------------------------------- */
-  
-  /* shortcuts */
+  double uplus, uminus; 
+ 
   t = 0.5 * (lambda-1.);
   s = 0.25 * beta;
   
-  /* mode = location of maximum of sqrt(f(x)) */
   xm = mode(lambda, beta);
   
   nc = t*std::log(xm) - s*(xm + 1./xm);
-  a = -(2.*(lambda+1.)/beta + xm);       /* < 0 */
+  a = -(2.*(lambda+1.)/beta + xm);
   b = (2.*(lambda-1.)*xm/beta - 1.);
   c = xm;
   
   p = b - a*a/3.;
   q = (2.*a*a*a)/27. - (a*b)/3. + c;
   
-  /* use Cardano's rule */
   fi = std::acos(-q/(2.*sqrt(-(p*p*p)/27.)));
   fak = 2.*std::sqrt(-p/3.);
   y1 = fak * std::cos(fi/3.) - a/3.;
@@ -156,25 +155,25 @@ double algo3(double const &lambda, double const &beta){
   uplus  = (y1-xm) * std::exp(t*std::log(y1) - s*(y1 + 1./y1) - nc);
   uminus = (y2-xm) * std::exp(t*std::log(y2) - s*(y2 + 1./y2) - nc);
   
-  /* -- Generate sample ---------------------------------------------------- */
+  do{
+    U = R::runif(uminus, uplus);
+    V = R::runif(0.0, 1.0);
+    X = U/V + xm;
+  } 
+  while ((X <= 0.) || ((std::log(V)) > (t*std::log(X) - s*(X + 1./X) - nc)));
   
-  do {
-    U = R::runif(uminus, uplus);    /* U(u-,u+)  */
-  V = R::runif(0.0, 1.0);         /* U(0,vmax) */
-  X = U/V + xm;
-  } while ((X <= 0.) || ((std::log(V)) > (t*std::log(X) - s*(X + 1./X) - nc)));
-  
-  /* -- End ---------------------------------------------------------------- */
   
   return X;
 }
 
 
 double g(double const &x, double const &lambda, double const &beta){
+  // quasi density
   return std::pow(x, lambda-1.0)*std::exp(-0.5*beta*(x+(1.0/x)));
 }
 
 double mode(double const &lambda, double const &beta){
+  // mode of distribution
   if (lambda >= 1){
     return (sqrt((lambda-1.)*(lambda-1.) + beta*beta)+(lambda-1.))/beta;
   } else {
