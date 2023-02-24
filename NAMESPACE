@@ -2,8 +2,12 @@ useDynLib(ngreg)
 
 importFrom(tictoc, tic, toc)
 importFrom(Rcpp, evalCpp)
-importFrom(stats, quantile)
+importFrom(stats, quantile, lm, median)
+importFrom(utils, head, tail)
 
 export(NG)
+export(summary.NG)
 S3method(summary, NG)
 S3method(print, NG)
+
+S3method(print, summary.NG)
